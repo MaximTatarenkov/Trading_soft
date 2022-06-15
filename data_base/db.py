@@ -1,7 +1,7 @@
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
 
-from configuration import CONNECTION_ROW
+from .configuration import CONNECTION_ROW
 
 
 engine = create_engine(CONNECTION_ROW)

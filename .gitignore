@@ -4,6 +4,6 @@ env
 __pycache__
 .vscode
 1.py
-configuration.py
+data_base/configuration.py
 alembic
 alembic.ini
