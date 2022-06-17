@@ -1,6 +1,6 @@
 from sqlalchemy import Column, String, Integer, ForeignKey, Float, SmallInteger, BigInteger, DateTime, Boolean
 from sqlalchemy.orm import relationship
-from .db import engine
+from db import engine
 from sqlalchemy.ext.declarative import declarative_base
 
 
@@ -13,11 +13,13 @@ class Symbols(Base):
 
     id = Column(Integer, primary_key=True)
     symbol = Column(String(10), nullable=False)
+    name = Column(String(50))
     group_id = Column(SmallInteger, ForeignKey("groups.id"))
     av_month_vol = Column(Float)
     av_day_vol_last_month = Column(Float)
     av_prof = Column(Float)
     av_prof_last_month = Column(Float)
+    group = relationship("Groups", backref="symbol")
 
 
 class Groups(Base):
@@ -26,7 +28,6 @@ class Groups(Base):
 
     id = Column(SmallInteger, primary_key=True)
     group = Column(String(20), nullable=False)
-    symbols = relationship("Symbols")
 
 class Orders(Base):
 
