@@ -3,7 +3,7 @@ env
 */__pycache__
 __pycache__
 .vscode
-1.py
+tst.py
 data_base/configuration.py
 alembic
 alembic.ini
