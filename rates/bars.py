@@ -65,6 +65,6 @@ class Rates:
     def convert_bars_to_df(self, bars):
         data_frame_bars = pd.DataFrame(bars, columns=["time", "open", "high", "low", "close", "tick_volume", "spread", "real_volume"])
         data_frame_bars["time"] = pd.to_datetime(data_frame_bars["time"], unit="s")
-        data_frame_bars.rename(columns = {'tick_volume' : 'volume'}, inplace = True)
-        data_frame_bars = data_frame_bars.drop(["spread", "real_volume"], axis=1)
+        # data_frame_bars.rename(columns = {'tick_volume' : 'volume'}, inplace = True)
+        # data_frame_bars = data_frame_bars.drop(["spread", "real_volume"], axis=1)
         return data_frame_bars

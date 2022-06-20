@@ -24,6 +24,3 @@ class Data_base():
                 session.commit()
             except:
                 session.rollback()
-            print("Saved")
-
-    
