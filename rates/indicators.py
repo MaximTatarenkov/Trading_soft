@@ -8,25 +8,25 @@ class Indicator:
         self.period = period
 
     def get_fisher(self):
-        fish = TA.FISH(self.bars, period=self.period)
+        fish = round(TA.FISH(self.bars, period=self.period), 2)
         return fish
 
     def get_ao(self):
-        ao = TA.AO(self.bars)
+        ao = round(TA.AO(self.bars), 2)
         return ao
 
     def get_rsi(self):
-        rsi = TA.RSI(self.bars, period=self.period)
+        rsi = round(TA.RSI(self.bars, period=self.period), 2)
         return rsi
 
     def get_mfi(self):
-        mfi = TA.MFI(self.bars, period=self.period)
+        mfi = round(TA.MFI(self.bars, period=self.period), 2)
         return mfi
 
     def attach_indicators(self):
-        fish = self.get_fisher()
+        fisher = self.get_fisher()
         ao = self.get_ao()
         rsi = self.get_rsi()
         mfi = self.get_mfi()
-        self.bars["fish"], self.bars["ao"], self.bars["rsi"], self.bars["mfi"] = fish, ao, rsi, mfi
+        self.bars["fisher"], self.bars["ao"], self.bars["rsi"], self.bars["mfi"] = fisher, ao, rsi, mfi
         return self.bars

@@ -3,9 +3,10 @@ import pandas as pd
 
 from main import run, TIME_ZONE
 from rates.bars import Rates
-from db import Data_base, Session, engine
-import models
+from db import Data_base, get_session, engine
+from utils.data import SNP, SNPP
 from rates.indicators import Indicator
+import models
 
 
 TIME_FRAME_TABLES = {"d1": models.D1_bars,
@@ -20,18 +21,24 @@ TIME_FRAME_TABLES = {"d1": models.D1_bars,
 class Filling(Rates, Data_base):
 
     def get_first_bar_for_d1(self):
+        chance = 1
         first_bar = self.get_bars_range(datetime(1970, 1, 1, tzinfo=TIME_ZONE),
                             datetime(1970, 5,5, tzinfo=TIME_ZONE)
                             ) # даты выбраны любые (до полу года)
-        try:
+        if not first_bar.empty:
             date = first_bar["time"][0]
-        except:
-            print(f"Dataframe {self.symbol} пустой")
+            return date
+        elif first_bar.empty and chance < 4:
+            chance += 1
+            print(f"Dataframe {self.symbol} пустой. Шанс {chance}.")
+            return self.get_first_bar_for_d1()
+        else:
+            print(f"Dataframe {self.symbol} пустой. Шанс {chance}. Все!!!")
             return False
-        return date
 
-    def check_first_bar_for_d1(self, first_time):
-        delta = timedelta(days=1)
+
+    def check_first_bar(self, first_time):
+        delta = timedelta(days=10)
         range_day = first_time + delta
         range_bars = self.get_bars_range(first_time, range_day)
         second_time = range_bars["time"][1]
@@ -40,14 +47,30 @@ class Filling(Rates, Data_base):
         return False
 
     def get_first_bar(self):
+        if self.time_frame in ["h1", "m30", "m10"]:
+            with get_session() as session:
+                table = models.H2_bars # в остальных периодах начальные бары такие же
+                simbol_id = session.query(models.Symbols.id).filter(models.Symbols.symbol==self.symbol).one()[0]
+                bar_time = session.query(table.datetime).filter(table.symbol_id==simbol_id).order_by(table.datetime).first()[0]
+                check_time = bar_time - timedelta(days=1)
+                check_bar = self.check_first_bar(check_time)
+                if check_bar:
+                    if check_bar.hour != 0 or check_bar.minute != 0:
+                        return check_bar
         desired_date = None
         first_bar = self.get_first_bar_for_d1()
-        if first_bar.hour != 0 or first_bar.minute != 0:
-            return first_bar
+        attempt = 0
+        if first_bar:
+            if first_bar.hour != 0 or first_bar.minute != 0:
+                return first_bar
+            else:
+                second_bar = self.check_first_bar(first_bar)
+                if second_bar:
+                    return second_bar
         else:
-            second_bar = self.check_first_bar_for_d1(first_bar)
-            if second_bar:
-                return second_bar
+            attempt += 1
+            if attempt < 3:
+                self.get_first_bar()
         first_date = int(datetime(2000, 1, 1, tzinfo=TIME_ZONE).timestamp())
         curent_date = int(datetime.now().timestamp())
         later = True
@@ -71,7 +94,7 @@ class Filling(Rates, Data_base):
         return desired_date
 
     def get_range(self, date_from):
-        date_to = date_from + timedelta(weeks=5)
+        date_to = date_from + timedelta(weeks=10)
         if date_to > datetime.now():
             date_to = datetime.now()
         bars_range = self.get_bars_range(date_from, date_to)
@@ -83,82 +106,117 @@ class Filling(Rates, Data_base):
         else:
             first_bar = self.get_first_bar()
         bars = []
-        while first_bar < datetime.now():
-            range_bars = self.get_range(first_bar)
-            with Session() as session:
-                symbol = session.query(models.Symbols.id).filter(models.Symbols.symbol==self.symbol).one()[0]
-            for bar in range_bars.itertuples(index=False):
-                data_for_save = TIME_FRAME_TABLES[self.time_frame](symbol_id=symbol,
-                                                                   datetime=bar.time,
-                                                                   open=bar.open,
-                                                                   high=bar.high,
-                                                                   low=bar.low,
-                                                                   close=bar.close,
-                                                                   tick_volume=bar.tick_volume,
-                                                                   real_volume=bar.real_volume,
-                                                                   spread=bar.spread)
-                bars.append(data_for_save)
-            first_bar += timedelta(weeks=10)
-        self.save_data_to_db(bars)
+        with get_session() as session:
+            symbol = session.query(models.Symbols.id).filter(models.Symbols.symbol==self.symbol).one()[0]
+            while first_bar < datetime.now():
+                range_bars = self.get_range(first_bar)
+                for bar in range_bars.itertuples(index=False):
+                    data_for_save = TIME_FRAME_TABLES[self.time_frame](symbol_id=symbol,
+                                                                       datetime=bar.time,
+                                                                       open=round(bar.open, 2),
+                                                                       high=round(bar.high, 2),
+                                                                       low=round(bar.low, 2),
+                                                                       close=round(bar.close, 2),
+                                                                       tick_volume=bar.tick_volume,
+                                                                       real_volume=bar.real_volume,
+                                                                       spread=bar.spread
+                                                                       )
+                    bars.append(data_for_save)
+                first_bar += timedelta(weeks=10)
+            self.save_data_to_db(bars, session)
 
-    def fill_symbol(self, group):
-        from tst import SNP
+    @staticmethod
+    def fill_symbol(group):
         data = []
-        with Session() as session:
+        with get_session() as session:
             group_id = session.query(models.Groups.id).filter(models.Groups.group==group).one()[0]
-        for sym in SNP:
-            data_symb = models.Symbols(symbol=sym, name=SNP[sym], group_id=group_id)
-            data.append(data_symb)
-        self.save_data_to_db(data)
+            for sym in SNP:
+                data_symb = models.Symbols(symbol=sym, name=SNP[sym], group_id=group_id)
+                data.append(data_symb)
+            Data_base.save_data_to_db(data, session)
 
-    def get_indicators(self):
-        with Session() as session:
-            table = TIME_FRAME_TABLES[self.time_frame]
-            simbol_id = session.query(models.Symbols.id).filter(models.Symbols.symbol==self.symbol).one()[0]
-            bars = session.query(table).filter(table.symbol_id==simbol_id).order_by(table.datetime).limit(150)
-        df_bars = pd.read_sql(bars.statement, engine)
-        df_bars.rename(columns = {'real_volume' : 'volume'}, inplace = True)
+    def get_indicators(self, session, count, table, simbol_id):
+        bars = session.query(table.id,
+                             table.datetime,
+                             table.open,
+                             table.high,
+                             table.low,
+                             table.close,
+                             table.real_volume).filter(table.symbol_id==simbol_id).order_by(table.datetime)[(count - 135):(count)]
+        df_bars = pd.DataFrame(bars, columns=["id", "datetime", "open", "high", "low", "close", "volume"])
         indicators = Indicator(df_bars)
         df_bars_with_indicators = indicators.attach_indicators()
         return df_bars_with_indicators
 
-    def save_indicators(self, indicators):
-        data_for_save = []
-        table = TIME_FRAME_TABLES[self.time_frame]
-        with Session() as session:
-            for row in indicators.itertuples(index=False):
-                session.query(table).filter(table.id==row.id).update({"rsi": None, "mfi": None})
-                session.commit()
-                print("Complete")
-                break
+    def save_indicators(self, session, count, table, simbol_id):
+        indicators = self.get_indicators(session, count, table, simbol_id)
+        for row in indicators[34:].itertuples(index=False):
+            session.query(table).filter(table.id==row.id).update({"rsi": row.rsi, "mfi": row.mfi, "ao": row.ao, "fisher": row.fisher})
 
+    def fill_indicators(self):
+        with get_session() as session:
+            table = TIME_FRAME_TABLES[self.time_frame]
+            simbol_id = session.query(models.Symbols.id).filter(models.Symbols.symbol==self.symbol).one()[0]
+            count_bars = session.query(table).filter(table.symbol_id==simbol_id).count()
+            count = 135 # эта цифра используется для индикаторов, которые отдают результаты не
+                    # с первого бара(например АО дает результат только с 35) и + 100 следующих баров
+            while count <= (count_bars + 1):
+                self.save_indicators(session, count, table, simbol_id)
+                if (count + 100) < count_bars:
+                    count += 100
+                else:
+                    count = count_bars
+                    self.save_indicators(session, count, table, simbol_id)
+                    break
 
+def main():
+    for tf in ["m5"]:
+        print("***********************")
+        print(f"Start {tf}")
+        for sym in ["MMM"]:
+            print(f"[ {sym} ]")
+            fill = Filling(sym, tf)
+            try:
+                fill.fill_indicators()
+            except Exception as ex:
+                print(f"{sym}!!!", ex)
 
 
 if __name__=="__main__":
+    main()
 
-    fil = Filling("MMM", "d1")
-    fil.save_indicators(fil.get_indicators())
-    # print(fil.check_first_bar_for_d1(first))
-
-
-
-
-
-
-
-
-
-
-    # from tst import SNP
     # run()
-    # for tf in SNP:
+    # for tf in ["d1"]:
     #     print("***********************")
     #     print(f"Start {tf}")
-    #     for sym in S:
+    #     for sym in ["MMM"]:
     #         print(f"[ {sym} ]")
-    #         fil = Filling(sym, tf)
+    #         fill = Filling(sym, tf)
+    #         fill.fill_indicators()
+
+    # Filling.fill_symbol("S&P 500")
+
+    # run()
+    # for tf in TIME_FRAME_TABLES:
+    #     print("***********************")
+    #     print(f"Start {tf}")
+    #     for sym in SNP:
+    #         print(f"[ {sym} ]")
+    #         fill = Filling(sym, tf)
     #         try:
-    #             fil.save_bars_to_db()
+    #             fill.save_bars_to_db()
     #         except Exception as ex:
-    #             print(f"Not instrument {sym}!!!", ex)
+    #             print(f"{sym}!!!", ex)
+
+    # print("INDICATORS!!!!!!!!!!!")
+
+    # for tf in ["m30"]:
+    #     print("***********************")
+    #     print(f"Start {tf}")
+    #     for sym in ["TRMB"]:
+    #         print(f"[ {sym} ]")
+    #         fill = Filling(sym, tf)
+    #         try:
+    #             fill.fill_indicators()
+    #         except Exception as ex:
+    #             print(f"{sym}!!!", ex)

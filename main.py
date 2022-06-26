@@ -1,15 +1,14 @@
 import MetaTrader5 as mt5
 import os
 from dotenv import load_dotenv
-from datetime import datetime
 from pytz import timezone as tz
+from contextlib import contextmanager
 
-from rates.indicators import Indicator
-from rates.bars import Rates
 
 load_dotenv()
 
 TIME_ZONE = tz('Europe/Moscow')
+
 
 def run():
     if not mt5.initialize():
@@ -21,15 +20,36 @@ def run():
     authorized = mt5.login(login, password, server)
     if authorized:
         print("Connected!!!")
-        # currentTimeZone = tz('Europe/Moscow')
-        # date_from = datetime(2011, 9, 30, tzinfo=currentTimeZone)
-        # rates = Rates(symbol="BTCUSD", time_frame="m5", bars_count=50, date_from=date_from)
-        # bars = rates.get_bars_from()
-        # print(bars)
-        # indicator = Indicator(bars)
-        # bars_and_indicators = indicator.attach_indicators()
     else:
         print("failed to connect at account #{}, error code: {}".format(login, mt5.last_error()))
 
+if __name__=="__main__":
+    mt5.shutdown()
 
-mt5.shutdown()
+
+
+# @contextmanager
+# def run():
+#     try:
+#         yield mt5.initialize()
+#         login = int(os.environ.get("LOGIN"))
+#         password = os.environ.get("PASSWORD")
+#         server = os.environ.get("SERVER")
+#         authorized = mt5.login(login, password, server)
+#         if authorized:
+#             print("connected to account #{}".format(login))
+#         else:
+#             print("failed to connect at account #{}, error code: {}".format(login, mt5.last_error()))
+#     except:
+#         print("initialize failed")
+#         raise
+#     else:
+#         mt5.shutdown()
+    #     login = int(os.environ.get("LOGIN"))
+    #     password = os.environ.get("PASSWORD")
+    #     server = os.environ.get("SERVER")
+    #     authorized = mt5.login(login, password, server)
+    #     if authorized:
+    #         print("Connected!!!")
+    #     else:
+    #         print(f"failed to connect at account #{login}, error code: {mt5.last_error()}")
