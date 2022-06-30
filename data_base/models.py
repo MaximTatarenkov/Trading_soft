@@ -7,19 +7,22 @@ from sqlalchemy.ext.declarative import declarative_base
 Base = declarative_base(bind=engine)
 
 
-class Symbols(Base):
+class Instruments(Base):
 
-    __tablename__ = "symbols"
+    __tablename__ = "instruments"
 
     id = Column(Integer, primary_key=True)
     symbol = Column(String(10), nullable=False)
     name = Column(String(50))
     group_id = Column(SmallInteger, ForeignKey("groups.id"))
-    av_month_vol = Column(Float)
-    av_day_vol_last_month = Column(Float)
-    av_prof = Column(Float)
-    av_prof_last_month = Column(Float)
-    group = relationship("Groups", backref="symbol")
+    avg_volume = Column(Float)
+    avg_volume_lm = Column(Float)
+    avg_prof = Column(Float)
+    avg_prof_lm = Column(Float)
+    atr = Column(Float)
+    atr_percent = Column(Float)
+    closing_price = Column(Float)
+    group = relationship("Groups", backref="instrument")
 
 
 class Groups(Base):
@@ -36,7 +39,7 @@ class Orders(Base):
     id = Column(Integer, primary_key=True)
     date_from = Column(DateTime, nullable=False)
     date_to = Column(DateTime)
-    symbol_id = Column(Integer, ForeignKey("symbols.id"), nullable=False)
+    instrument_id = Column(Integer, ForeignKey("instruments.id"), nullable=False)
     typy_order_id = Column(SmallInteger, ForeignKey("type_order.id"), nullable=False)
     profitability = Column(Boolean)
     open = Column(Float, nullable=False)
@@ -45,7 +48,7 @@ class Orders(Base):
     stop_loss = Column(Float, nullable=False)
     commission = Column(Float)
     profit = Column(Float)
-    symbol = relationship("Symbols", backref="order")
+    instrument = relationship("Instruments", backref="order")
 
 
 
@@ -63,7 +66,7 @@ class D1_bars(Base):
     __tablename__ = "d1_bars"
 
     id = Column(Integer, primary_key=True)
-    symbol_id = Column(Integer, ForeignKey("symbols.id"), nullable=False)
+    instrument_id = Column(Integer, ForeignKey("instruments.id"), nullable=False)
     datetime = Column(DateTime, nullable=False)
     open = Column(Float, nullable=False)
     high = Column(Float)
@@ -76,7 +79,7 @@ class D1_bars(Base):
     ao = Column(Float)
     rsi = Column(Float)
     mfi = Column(Float)
-    symbol = relationship("Symbols", backref="d1_bar")
+    instrument = relationship("Instruments", backref="d1_bar")
 
 
 class H2_bars(Base):
@@ -84,7 +87,7 @@ class H2_bars(Base):
     __tablename__ = "h2_bars"
 
     id = Column(BigInteger, primary_key=True)
-    symbol_id = Column(Integer, ForeignKey("symbols.id"), nullable=False)
+    instrument_id = Column(Integer, ForeignKey("instruments.id"), nullable=False)
     datetime = Column(DateTime, nullable=False)
     open = Column(Float, nullable=False)
     high = Column(Float)
@@ -97,7 +100,7 @@ class H2_bars(Base):
     ao = Column(Float)
     rsi = Column(Float)
     mfi = Column(Float)
-    symbol = relationship("Symbols", backref="h2_bar")
+    instrument = relationship("Instruments", backref="h2_bar")
 
 
 class H1_bars(Base):
@@ -105,7 +108,7 @@ class H1_bars(Base):
     __tablename__ = "h1_bars"
 
     id = Column(BigInteger, primary_key=True)
-    symbol_id = Column(Integer, ForeignKey("symbols.id"), nullable=False)
+    instrument_id = Column(Integer, ForeignKey("instruments.id"), nullable=False)
     datetime = Column(DateTime, nullable=False)
     open = Column(Float, nullable=False)
     high = Column(Float)
@@ -118,7 +121,7 @@ class H1_bars(Base):
     ao = Column(Float)
     rsi = Column(Float)
     mfi = Column(Float)
-    symbol = relationship("Symbols", backref="h1_bar")
+    instrument = relationship("Instruments", backref="h1_bar")
 
 
 class M30_bars(Base):
@@ -126,7 +129,7 @@ class M30_bars(Base):
     __tablename__ = "m30_bars"
 
     id = Column(BigInteger, primary_key=True)
-    symbol_id = Column(Integer, ForeignKey("symbols.id"), nullable=False)
+    instrument_id = Column(Integer, ForeignKey("instruments.id"), nullable=False)
     datetime = Column(DateTime, nullable=False)
     open = Column(Float, nullable=False)
     high = Column(Float)
@@ -139,7 +142,7 @@ class M30_bars(Base):
     ao = Column(Float)
     rsi = Column(Float)
     mfi = Column(Float)
-    symbol = relationship("Symbols", backref="m30_bar")
+    instrument = relationship("Instruments", backref="m30_bar")
 
 
 class M10_bars(Base):
@@ -147,7 +150,7 @@ class M10_bars(Base):
     __tablename__ = "m10_bars"
 
     id = Column(BigInteger, primary_key=True)
-    symbol_id = Column(Integer, ForeignKey("symbols.id"), nullable=False)
+    instrument_id = Column(Integer, ForeignKey("instruments.id"), nullable=False)
     datetime = Column(DateTime, nullable=False)
     open = Column(Float, nullable=False)
     high = Column(Float)
@@ -160,7 +163,7 @@ class M10_bars(Base):
     ao = Column(Float)
     rsi = Column(Float)
     mfi = Column(Float)
-    symbol = relationship("Symbols", backref="m10_bar")
+    instrument = relationship("Instruments", backref="m10_bar")
 
 
 class M5_bars(Base):
@@ -168,7 +171,7 @@ class M5_bars(Base):
     __tablename__ = "m5_bars"
 
     id = Column(BigInteger, primary_key=True)
-    symbol_id = Column(Integer, ForeignKey("symbols.id"), nullable=False)
+    instrument_id = Column(Integer, ForeignKey("instruments.id"), nullable=False)
     datetime = Column(DateTime, nullable=False)
     open = Column(Float, nullable=False)
     high = Column(Float)
@@ -181,7 +184,7 @@ class M5_bars(Base):
     ao = Column(Float)
     rsi = Column(Float)
     mfi = Column(Float)
-    symbol = relationship("Symbols", backref="m5_bar")
+    instrument = relationship("Instruments", backref="m5_bar")
 
 
 class M1_bars(Base):
@@ -189,7 +192,7 @@ class M1_bars(Base):
     __tablename__ = "m1_bars"
 
     id = Column(BigInteger, primary_key=True)
-    symbol_id = Column(Integer, ForeignKey("symbols.id"), nullable=False)
+    instrument_id = Column(Integer, ForeignKey("instruments.id"), nullable=False)
     datetime = Column(DateTime, nullable=False)
     open = Column(Float, nullable=False)
     high = Column(Float)
@@ -202,7 +205,7 @@ class M1_bars(Base):
     ao = Column(Float)
     rsi = Column(Float)
     mfi = Column(Float)
-    symbol = relationship("Symbols", backref="m1_bar")
+    instrument = relationship("Instruments", backref="m1_bar")
 
 
 # Base.metadata.create_all(engine)
