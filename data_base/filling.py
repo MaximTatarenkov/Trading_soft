@@ -1,9 +1,11 @@
 from datetime import datetime, timedelta
+from sqlalchemy.sql import func
 import pandas as pd
+from statistics import mean
 
 from main import run, TIME_ZONE
 from rates.bars import Rates
-from db import Data_base, get_session, engine
+from db import Data_base, get_session
 from utils.data import SNP, SNPP
 from rates.indicators import Indicator
 import models
@@ -50,8 +52,8 @@ class Filling(Rates, Data_base):
         if self.time_frame in ["h1", "m30", "m10"]:
             with get_session() as session:
                 table = models.H2_bars # в остальных периодах начальные бары такие же
-                simbol_id = session.query(models.Symbols.id).filter(models.Symbols.symbol==self.symbol).one()[0]
-                bar_time = session.query(table.datetime).filter(table.symbol_id==simbol_id).order_by(table.datetime).first()[0]
+                symbol_id = session.query(models.Instruments.id).filter(models.Instruments.symbol==self.symbol).one()[0]
+                bar_time = session.query(table.datetime).filter(table.instrument_id==symbol_id).order_by(table.datetime).first()[0]
                 check_time = bar_time - timedelta(days=1)
                 check_bar = self.check_first_bar(check_time)
                 if check_bar:
@@ -107,11 +109,11 @@ class Filling(Rates, Data_base):
             first_bar = self.get_first_bar()
         bars = []
         with get_session() as session:
-            symbol = session.query(models.Symbols.id).filter(models.Symbols.symbol==self.symbol).one()[0]
+            symbol = session.query(models.Instruments.id).filter(models.Instruments.symbol==self.symbol).one()[0]
             while first_bar < datetime.now():
                 range_bars = self.get_range(first_bar)
                 for bar in range_bars.itertuples(index=False):
-                    data_for_save = TIME_FRAME_TABLES[self.time_frame](symbol_id=symbol,
+                    data_for_save = TIME_FRAME_TABLES[self.time_frame](instrument_id=symbol,
                                                                        datetime=bar.time,
                                                                        open=round(bar.open, 2),
                                                                        high=round(bar.high, 2),
@@ -126,54 +128,95 @@ class Filling(Rates, Data_base):
             self.save_data_to_db(bars, session)
 
     @staticmethod
-    def fill_symbol(group):
+    def fill_instruments(group):
         data = []
         with get_session() as session:
             group_id = session.query(models.Groups.id).filter(models.Groups.group==group).one()[0]
             for sym in SNP:
-                data_symb = models.Symbols(symbol=sym, name=SNP[sym], group_id=group_id)
+                data_symb = models.Instruments(symbol=sym, name=SNP[sym], group_id=group_id)
                 data.append(data_symb)
             Data_base.save_data_to_db(data, session)
 
-    def get_indicators(self, session, count, table, simbol_id):
+    def get_indicators(self, session, count, table, symbol_id):
         bars = session.query(table.id,
                              table.datetime,
                              table.open,
                              table.high,
                              table.low,
                              table.close,
-                             table.real_volume).filter(table.symbol_id==simbol_id).order_by(table.datetime)[(count - 135):(count)]
+                             table.real_volume).filter(table.instrument_id==symbol_id).order_by(table.datetime)[(count - 20035):(count)]
         df_bars = pd.DataFrame(bars, columns=["id", "datetime", "open", "high", "low", "close", "volume"])
         indicators = Indicator(df_bars)
         df_bars_with_indicators = indicators.attach_indicators()
         return df_bars_with_indicators
 
-    def save_indicators(self, session, count, table, simbol_id):
-        indicators = self.get_indicators(session, count, table, simbol_id)
+    def save_indicators(self, session, count, table, symbol_id):
+        indicators = self.get_indicators(session, count, table, symbol_id)
         for row in indicators[34:].itertuples(index=False):
             session.query(table).filter(table.id==row.id).update({"rsi": row.rsi, "mfi": row.mfi, "ao": row.ao, "fisher": row.fisher})
 
     def fill_indicators(self):
         with get_session() as session:
             table = TIME_FRAME_TABLES[self.time_frame]
-            simbol_id = session.query(models.Symbols.id).filter(models.Symbols.symbol==self.symbol).one()[0]
-            count_bars = session.query(table).filter(table.symbol_id==simbol_id).count()
-            count = 135 # эта цифра используется для индикаторов, которые отдают результаты не
-                    # с первого бара(например АО дает результат только с 35) и + 100 следующих баров
+            instrument_id = session.query(models.Instruments.id).filter(models.Instruments.symbol==self.symbol).one()[0]
+            count_bars = session.query(table).filter(table.instrument_id==instrument_id).count()
+            count = 20035 # эта цифра используется для индикаторов, которые отдают результаты не
+                    # с первого бара(например АО дает результат только с 35) и + 20000 следующих баров
+            if count > count_bars:
+                count = count_bars
             while count <= (count_bars + 1):
-                self.save_indicators(session, count, table, simbol_id)
-                if (count + 100) < count_bars:
-                    count += 100
+                self.save_indicators(session, count, table, instrument_id)
+                if (count + 20000) < count_bars:
+                    count += 20000
                 else:
                     count = count_bars
-                    self.save_indicators(session, count, table, simbol_id)
+                    self.save_indicators(session, count, table, instrument_id)
                     break
+        return
+
+    @staticmethod
+    def fill_avg_volume(symbol):
+        with get_session() as session:
+            table = models.D1_bars
+            instrument_id = session.query(models.Instruments.id).filter(models.Instruments.symbol==symbol).one()[0]
+            avg_volume = int(session.query(func.avg(table.real_volume)).filter(table.instrument_id == instrument_id).first()[0])
+            month_vol = session.query(table.real_volume).filter(table.instrument_id == instrument_id).order_by(table.datetime.desc()).limit(30).all()
+            avg_month_vol = int(mean([i[0] for i in month_vol]))
+            session.query(models.Instruments).filter(models.Instruments.id==instrument_id).update({"avg_volume": avg_volume, "avg_volume_lm": avg_month_vol})
+        return avg_volume
+
+    @staticmethod
+    def fill_atr_and_closing_price(symbol):
+        with get_session() as session:
+            table = models.D1_bars
+            instrument_id = session.query(models.Instruments.id).filter(models.Instruments.symbol==symbol).one()[0]
+            bars = session.query(table.id,
+                            table.datetime,
+                            table.open,
+                            table.high,
+                            table.low,
+                            table.close).filter(table.instrument_id==instrument_id).order_by(table.datetime.desc()).limit(20)
+            df_bars = pd.DataFrame(bars, columns=["id", "datetime", "open", "high", "low", "close"]).iloc[::-1]
+            indicator = Indicator(df_bars)
+            atr_df = indicator.get_atr()
+            atr = atr_df.iloc[-1]
+            closing_price = df_bars.close.iloc[-1]
+            atr_percent = round((atr / closing_price * 100), 2)
+            session.query(models.Instruments).filter(models.Instruments.id==instrument_id).update({"atr": atr, "atr_percent": atr_percent,"closing_price": closing_price})
+        return atr
+
+    def fill_all_last_changes(self):
+        with get_session() as session:
+            table = TIME_FRAME_TABLES[self.time_frame]
+            instrument_id = session.query(models.Instruments.id).filter(models.Instruments.symbol==self.symbol).one()[0]
+            last_bar = session.query(table.datetime).filter(table.instrument_id==instrument_id).order_by(table.datetime.desc()).limit(10)
+            print(last_bar)
 
 def main():
     for tf in ["m5"]:
         print("***********************")
         print(f"Start {tf}")
-        for sym in ["MMM"]:
+        for sym in ["META"]:
             print(f"[ {sym} ]")
             fill = Filling(sym, tf)
             try:
@@ -183,7 +226,11 @@ def main():
 
 
 if __name__=="__main__":
+
     main()
+    # fill = Filling("MMM", "d1")
+    # fill.fill_all_last_changes()
+
 
     # run()
     # for tf in ["d1"]:
@@ -194,19 +241,19 @@ if __name__=="__main__":
     #         fill = Filling(sym, tf)
     #         fill.fill_indicators()
 
-    # Filling.fill_symbol("S&P 500")
+    # Filling.fill_instruments("S&P 500")
 
     # run()
     # for tf in TIME_FRAME_TABLES:
     #     print("***********************")
     #     print(f"Start {tf}")
-    #     for sym in SNP:
-    #         print(f"[ {sym} ]")
-    #         fill = Filling(sym, tf)
-    #         try:
-    #             fill.save_bars_to_db()
-    #         except Exception as ex:
-    #             print(f"{sym}!!!", ex)
+        # for sym in SNP:
+        #     print(f"[ {sym} ]")
+        #     fill = Filling(sym, tf)
+        #     try:
+        #         fill.save_bars_to_db()
+        #     except Exception as ex:
+        #         print(f"{sym}!!!", ex)
 
     # print("INDICATORS!!!!!!!!!!!")
 
@@ -220,3 +267,25 @@ if __name__=="__main__":
     #             fill.fill_indicators()
     #         except Exception as ex:
     #             print(f"{sym}!!!", ex)
+
+    # print("VOLUMES!!!!!!!!!!!")
+
+    # for tf in ["d1"]:
+    #     print("***********************")
+    #     print(f"Start {tf}")
+    #     for sym in SNP:
+    #         print(f"[ {sym} ]")
+    #         fill = Filling(sym, tf)
+    #         try:
+    #             fill.fill_avg_volume()
+    #         except Exception as ex:
+    #             print(f"{sym}!!!", ex)
+
+    # print("ATR!!!!!!")
+
+    # for sym in SNP:
+    #     print(f"[ {sym} ]")
+    #     try:
+    #         Filling.fill_atr_and_closing_price(sym)
+    #     except Exception as ex:
+    #         print(f"{sym}!!!", ex)
