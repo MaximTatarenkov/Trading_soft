@@ -1,11 +1,11 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from sqlalchemy.sql import func
 import pandas as pd
 from statistics import mean
 
-from main import run, TIME_ZONE
+from main import run, TIME_ZONE, get_session
 from rates.bars import Rates
-from db import Data_base, get_session
+from db import Data_base
 from utils.data import SNP, SNPP
 from rates.indicators import Indicator
 import models
@@ -21,6 +21,16 @@ TIME_FRAME_TABLES = {"d1": models.D1_bars,
                      }
 
 class Filling(Rates, Data_base):
+
+    def fill_instruments(self, group, session):
+        data = []
+        group_id = session.query(models.Groups.id).filter(models.Groups.group==group).one()[0]
+        for sym in SNP:
+            data_symb = models.Instruments(symbol=sym, name=SNP[sym], group_id=group_id)
+            data.append(data_symb)
+        self.save_data_to_db(data, session=session)
+        return self
+
 
     def get_first_bar_for_d1(self):
         chance = 1
@@ -48,17 +58,17 @@ class Filling(Rates, Data_base):
             return second_time
         return False
 
-    def get_first_bar(self):
+
+    def get_first_bar(self, session):
         if self.time_frame in ["h1", "m30", "m10"]:
-            with get_session() as session:
-                table = models.H2_bars # в остальных периодах начальные бары такие же
-                symbol_id = session.query(models.Instruments.id).filter(models.Instruments.symbol==self.symbol).one()[0]
-                bar_time = session.query(table.datetime).filter(table.instrument_id==symbol_id).order_by(table.datetime).first()[0]
-                check_time = bar_time - timedelta(days=1)
-                check_bar = self.check_first_bar(check_time)
-                if check_bar:
-                    if check_bar.hour != 0 or check_bar.minute != 0:
-                        return check_bar
+            table = models.H2_bars # в периодах h1, m30, m10 начальные бары такие же
+            symbol_id = session.query(models.Instruments.id).filter(models.Instruments.symbol==self.symbol).one()[0]
+            bar_time = session.query(table.datetime).filter(table.instrument_id==symbol_id).order_by(table.datetime).first()[0]
+            check_time = bar_time - timedelta(days=1)
+            check_bar = self.check_first_bar(check_time)
+            if check_bar:
+                if check_bar.hour != 0 or check_bar.minute != 0:
+                    return check_bar
         desired_date = None
         first_bar = self.get_first_bar_for_d1()
         attempt = 0
@@ -72,7 +82,7 @@ class Filling(Rates, Data_base):
         else:
             attempt += 1
             if attempt < 3:
-                self.get_first_bar()
+                self.get_first_bar(session)
         first_date = int(datetime(2000, 1, 1, tzinfo=TIME_ZONE).timestamp())
         curent_date = int(datetime.now().timestamp())
         later = True
@@ -95,6 +105,7 @@ class Filling(Rates, Data_base):
                 later = True
         return desired_date
 
+
     def get_range(self, date_from):
         date_to = date_from + timedelta(weeks=10)
         if date_to > datetime.now():
@@ -102,134 +113,152 @@ class Filling(Rates, Data_base):
         bars_range = self.get_bars_range(date_from, date_to)
         return bars_range
 
-    def save_bars_to_db(self):
-        if self.time_frame == "d1":
-            first_bar = self.get_first_bar_for_d1()
+
+    def save_bars_to_db(self, session, first_bar=None, last_bar=datetime.now(), instrument_id=None):
+        flag = False
+        if not first_bar:
+            if self.time_frame == "d1":
+                first_bar = self.get_first_bar_for_d1()
+            else:
+                first_bar = self.get_first_bar(session)
         else:
-            first_bar = self.get_first_bar()
+            flag = True
         bars = []
-        with get_session() as session:
-            symbol = session.query(models.Instruments.id).filter(models.Instruments.symbol==self.symbol).one()[0]
-            while first_bar < datetime.now():
-                range_bars = self.get_range(first_bar)
-                for bar in range_bars.itertuples(index=False):
-                    data_for_save = TIME_FRAME_TABLES[self.time_frame](instrument_id=symbol,
-                                                                       datetime=bar.time,
-                                                                       open=round(bar.open, 2),
-                                                                       high=round(bar.high, 2),
-                                                                       low=round(bar.low, 2),
-                                                                       close=round(bar.close, 2),
-                                                                       tick_volume=bar.tick_volume,
-                                                                       real_volume=bar.real_volume,
-                                                                       spread=bar.spread
-                                                                       )
-                    bars.append(data_for_save)
-                first_bar += timedelta(weeks=10)
-            self.save_data_to_db(bars, session)
+        if not instrument_id:
+            instrument_id = session.query(models.Instruments.id).filter(models.Instruments.symbol==self.symbol).one()[0]
+        while first_bar < last_bar:
+            range_bars = self.get_range(first_bar)
+            if flag:
+                range_bars = range_bars[1:]
+                flag = False
+            for bar in range_bars.itertuples(index=False):
+                data_for_save = TIME_FRAME_TABLES[self.time_frame](instrument_id=instrument_id,
+                                                                    datetime=bar.time,
+                                                                    open=round(bar.open, 2),
+                                                                    high=round(bar.high, 2),
+                                                                    low=round(bar.low, 2),
+                                                                    close=round(bar.close, 2),
+                                                                    tick_volume=bar.tick_volume,
+                                                                    real_volume=bar.real_volume,
+                                                                    spread=bar.spread
+                                                                    )
+                bars.append(data_for_save)
+            first_bar += timedelta(weeks=10)
+        self.save_data_to_db(bars, session)
+        return len(bars)
 
-    @staticmethod
-    def fill_instruments(group):
-        data = []
-        with get_session() as session:
-            group_id = session.query(models.Groups.id).filter(models.Groups.group==group).one()[0]
-            for sym in SNP:
-                data_symb = models.Instruments(symbol=sym, name=SNP[sym], group_id=group_id)
-                data.append(data_symb)
-            Data_base.save_data_to_db(data, session)
 
-    def get_indicators(self, session, count, table, symbol_id):
+    def get_indicators(self, session, count, table, symbol_id, delta):
         bars = session.query(table.id,
                              table.datetime,
                              table.open,
                              table.high,
                              table.low,
                              table.close,
-                             table.real_volume).filter(table.instrument_id==symbol_id).order_by(table.datetime)[(count - 20035):(count)]
+                             table.real_volume).filter(table.instrument_id==symbol_id).order_by(table.datetime)[(count - delta):(count)]
         df_bars = pd.DataFrame(bars, columns=["id", "datetime", "open", "high", "low", "close", "volume"])
         indicators = Indicator(df_bars)
         df_bars_with_indicators = indicators.attach_indicators()
         return df_bars_with_indicators
 
-    def save_indicators(self, session, count, table, symbol_id):
-        indicators = self.get_indicators(session, count, table, symbol_id)
+
+    def save_indicators(self, session, count, table, symbol_id, delta=20035):
+        indicators = self.get_indicators(session, count, table, symbol_id, delta)
         for row in indicators[34:].itertuples(index=False):
             session.query(table).filter(table.id==row.id).update({"rsi": row.rsi, "mfi": row.mfi, "ao": row.ao, "fisher": row.fisher})
+        return self
 
-    def fill_indicators(self):
-        with get_session() as session:
-            table = TIME_FRAME_TABLES[self.time_frame]
-            instrument_id = session.query(models.Instruments.id).filter(models.Instruments.symbol==self.symbol).one()[0]
-            count_bars = session.query(table).filter(table.instrument_id==instrument_id).count()
-            count = 20035 # эта цифра используется для индикаторов, которые отдают результаты не
-                    # с первого бара(например АО дает результат только с 35) и + 20000 следующих баров
-            if count > count_bars:
+
+    def fill_indicators(self, session):
+        table = TIME_FRAME_TABLES[self.time_frame]
+        instrument_id = session.query(models.Instruments.id).filter(models.Instruments.symbol==self.symbol).one()[0]
+        count_bars = session.query(table).filter(table.instrument_id==instrument_id).count()
+        count = 20035 # эта цифра используется для индикаторов, которые отдают результаты не
+                # с первого бара(например АО дает результат только с 35) и + 20000 следующих баров
+        if count > count_bars:
+            count = count_bars
+        while count <= (count_bars + 1):
+            self.save_indicators(session, count, table, instrument_id)
+            if (count + 20000) < count_bars:
+                count += 20000
+            else:
+                delta = count_bars - count
                 count = count_bars
-            while count <= (count_bars + 1):
-                self.save_indicators(session, count, table, instrument_id)
-                if (count + 20000) < count_bars:
-                    count += 20000
-                else:
-                    count = count_bars
-                    self.save_indicators(session, count, table, instrument_id)
-                    break
-        return
+                self.save_indicators(session, count, table, instrument_id, delta=delta)
+                break
+        return self
+
 
     @staticmethod
-    def fill_avg_volume(symbol):
-        with get_session() as session:
-            table = models.D1_bars
+    def fill_avg_volume(session, symbol=None, instrument_id=None):
+        table = models.D1_bars
+        if not instrument_id:
             instrument_id = session.query(models.Instruments.id).filter(models.Instruments.symbol==symbol).one()[0]
-            avg_volume = int(session.query(func.avg(table.real_volume)).filter(table.instrument_id == instrument_id).first()[0])
-            month_vol = session.query(table.real_volume).filter(table.instrument_id == instrument_id).order_by(table.datetime.desc()).limit(30).all()
-            avg_month_vol = int(mean([i[0] for i in month_vol]))
-            session.query(models.Instruments).filter(models.Instruments.id==instrument_id).update({"avg_volume": avg_volume, "avg_volume_lm": avg_month_vol})
+        avg_volume = int(session.query(func.avg(table.real_volume)).filter(table.instrument_id == instrument_id).first()[0])
+        month_vol = session.query(table.real_volume).filter(table.instrument_id == instrument_id).order_by(table.datetime.desc()).limit(30).all()
+        avg_month_vol = int(mean([i[0] for i in month_vol]))
+        session.query(models.Instruments).filter(models.Instruments.id==instrument_id).update({"avg_volume": avg_volume, "avg_volume_lm": avg_month_vol})
         return avg_volume
 
+
     @staticmethod
-    def fill_atr_and_closing_price(symbol):
-        with get_session() as session:
-            table = models.D1_bars
+    def fill_atr_and_closing_price(session, symbol=None, instrument_id=None):
+        table = models.D1_bars
+        if not instrument_id:
             instrument_id = session.query(models.Instruments.id).filter(models.Instruments.symbol==symbol).one()[0]
-            bars = session.query(table.id,
-                            table.datetime,
-                            table.open,
-                            table.high,
-                            table.low,
-                            table.close).filter(table.instrument_id==instrument_id).order_by(table.datetime.desc()).limit(20)
-            df_bars = pd.DataFrame(bars, columns=["id", "datetime", "open", "high", "low", "close"]).iloc[::-1]
-            indicator = Indicator(df_bars)
-            atr_df = indicator.get_atr()
-            atr = atr_df.iloc[-1]
-            closing_price = df_bars.close.iloc[-1]
-            atr_percent = round((atr / closing_price * 100), 2)
-            session.query(models.Instruments).filter(models.Instruments.id==instrument_id).update({"atr": atr, "atr_percent": atr_percent,"closing_price": closing_price})
+        bars = session.query(table.id,
+                        table.datetime,
+                        table.open,
+                        table.high,
+                        table.low,
+                        table.close).filter(table.instrument_id==instrument_id).order_by(table.datetime.desc()).limit(20)
+        df_bars = pd.DataFrame(bars, columns=["id", "datetime", "open", "high", "low", "close"]).iloc[::-1]
+        indicator = Indicator(df_bars)
+        atr_df = indicator.get_atr()
+        atr = atr_df.iloc[-1]
+        closing_price = df_bars.close.iloc[-1]
+        atr_percent = round((atr / closing_price * 100), 2)
+        session.query(models.Instruments).filter(models.Instruments.id==instrument_id).update({"atr": atr, "atr_percent": atr_percent,"closing_price": closing_price})
         return atr
+
 
     def fill_all_last_changes(self):
         with get_session() as session:
             table = TIME_FRAME_TABLES[self.time_frame]
             instrument_id = session.query(models.Instruments.id).filter(models.Instruments.symbol==self.symbol).one()[0]
-            last_bar = session.query(table.datetime).filter(table.instrument_id==instrument_id).order_by(table.datetime.desc()).limit(10)
-            print(last_bar)
+            first_dt_bar = session.query(table.datetime).filter(table.instrument_id==instrument_id).order_by(table.datetime.desc()).first()[0]
+            count_new_bars = self.save_bars_to_db(session=session, first_bar=first_dt_bar, instrument_id=instrument_id)
+        with get_session() as session:
+            count_bars = session.query(table).filter(table.instrument_id==instrument_id).count()
+            self.save_indicators(session, count=count_bars, table=table, symbol_id=instrument_id, delta=(count_new_bars + 35))
+            if self.time_frame == "d1":
+                Filling.fill_avg_volume(session, instrument_id=instrument_id)
+                Filling.fill_atr_and_closing_price(session, instrument_id=instrument_id)
+        return self
+
+time = ["d1", "h2", "h1", "m30", "m10", "m5"]
 
 def main():
-    for tf in ["m5"]:
+    run()
+    for tf in time:
         print("***********************")
         print(f"Start {tf}")
-        for sym in ["META"]:
+        for sym in SNP:
+            # with get_session() as session:
             print(f"[ {sym} ]")
             fill = Filling(sym, tf)
-            try:
-                fill.fill_indicators()
-            except Exception as ex:
-                print(f"{sym}!!!", ex)
+            # try:
+            fill.fill_all_last_changes()
+            # except Exception as ex:
+            #     print(f"{sym}!!!", ex)
 
 
 if __name__=="__main__":
-
     main()
-    # fill = Filling("MMM", "d1")
-    # fill.fill_all_last_changes()
+    # with get_session() as session:
+    #     Filling.fill_avg_volume(session, instrument_id=2)
+    #     Filling.fill_atr_and_closing_price(session, instrument_id=2)
+
 
 
     # run()
