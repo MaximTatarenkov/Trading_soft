@@ -1,6 +1,6 @@
 from sqlalchemy import Column, String, Integer, ForeignKey, Float, SmallInteger, BigInteger, DateTime, Boolean
 from sqlalchemy.orm import relationship
-from db import engine
+from main import engine
 from sqlalchemy.ext.declarative import declarative_base
 
 
@@ -208,4 +208,3 @@ class M1_bars(Base):
     instrument = relationship("Instruments", backref="m1_bar")
 
 
-# Base.metadata.create_all(engine)

@@ -27,11 +27,6 @@ class Indicator:
         atr = round(TA.ATR(self.bars, period=self.period), 2)
         return atr
 
-    # def attach_atr(self):
-    #     atr = self.get_atr()
-    #     self.bars["atr"] = atr
-    #     return self.bars
-
     def attach_indicators(self):
         fisher = self.get_fisher()
         ao = self.get_ao()
