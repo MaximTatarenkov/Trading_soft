@@ -115,22 +115,16 @@ class Filling(Rates, Data_base):
 
 
     def save_bars_to_db(self, session, first_bar=None, last_bar=datetime.now(), instrument_id=None):
-        flag = False
         if not first_bar:
             if self.time_frame == "d1":
                 first_bar = self.get_first_bar_for_d1()
             else:
                 first_bar = self.get_first_bar(session)
-        else:
-            flag = True
         bars = []
         if not instrument_id:
             instrument_id = session.query(models.Instruments.id).filter(models.Instruments.symbol==self.symbol).one()[0]
         while first_bar < last_bar:
-            range_bars = self.get_range(first_bar)
-            if flag:
-                range_bars = range_bars[1:]
-                flag = False
+            range_bars = self.get_range(first_bar)[1:]
             for bar in range_bars.itertuples(index=False):
                 data_for_save = TIME_FRAME_TABLES[self.time_frame](instrument_id=instrument_id,
                                                                     datetime=bar.time,
@@ -254,8 +248,15 @@ def main():
 
 
 if __name__=="__main__":
-    main()
+    run()
     # with get_session() as session:
+        # data = Data_base.get_bars_from_db(session=session,
+        #                            dt_from=datetime(2022, 6, 1, tzinfo=TIME_ZONE),
+        #                            dt_to=datetime(2022, 7, 1, tzinfo=TIME_ZONE),
+        #                            time_frame="d1",
+        #                            symbol="MMM"
+        #                            )
+        # print([i.open for i in data])
     #     Filling.fill_avg_volume(session, instrument_id=2)
     #     Filling.fill_atr_and_closing_price(session, instrument_id=2)
 
@@ -269,8 +270,8 @@ if __name__=="__main__":
     #         print(f"[ {sym} ]")
     #         fill = Filling(sym, tf)
     #         fill.fill_indicators()
-
-    # Filling.fill_instruments("S&P 500")
+        # fill = Filling("MMM", "d1")
+        # fill.save_bars_to_db(session=session)
 
     # run()
     # for tf in TIME_FRAME_TABLES:
