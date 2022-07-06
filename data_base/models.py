@@ -207,4 +207,6 @@ class M1_bars(Base):
     mfi = Column(Float)
     instrument = relationship("Instruments", backref="m1_bar")
 
+if __name__=="__main__":
+    print("main")
 
