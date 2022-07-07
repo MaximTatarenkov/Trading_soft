@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, ForeignKey, Float, SmallInteger, BigInteger, DateTime, Boolean
+from sqlalchemy import Column, String, Integer, ForeignKey, Float, SmallInteger, BigInteger, DateTime, Boolean, Text
 from sqlalchemy.orm import relationship
 from main import engine
 from sqlalchemy.ext.declarative import declarative_base
@@ -32,17 +32,18 @@ class Groups(Base):
     id = Column(SmallInteger, primary_key=True)
     group = Column(String(20), nullable=False)
 
+
 class Orders(Base):
 
     __tablename__ = "orders"
 
     id = Column(Integer, primary_key=True)
-    date_from = Column(DateTime, nullable=False)
+    date_from = Column(DateTime)
     date_to = Column(DateTime)
     instrument_id = Column(Integer, ForeignKey("instruments.id"), nullable=False)
-    typy_order_id = Column(SmallInteger, ForeignKey("type_order.id"), nullable=False)
+    type_order = Column(SmallInteger, ForeignKey("type_order.id"), nullable=False)
     profitability = Column(Boolean)
-    open = Column(Float, nullable=False)
+    open = Column(Float)
     close = Column(Float)
     number = Column(Integer, nullable=False)
     stop_loss = Column(Float, nullable=False)
@@ -50,6 +51,32 @@ class Orders(Base):
     profit = Column(Float)
     instrument = relationship("Instruments", backref="order")
 
+
+class StrategyTesting(Base):
+
+    __tablename__ = "strategy_testing"
+
+    id = Column(Integer, primary_key=True)
+    instrument_id = Column(Integer, ForeignKey("instruments.id"), nullable=False)
+    date_from = Column(DateTime)
+    date_to = Column(DateTime)
+    open = Column(Float)
+    close = Column(Float)
+    type_order = Column(SmallInteger, ForeignKey("type_order.id"), nullable=False)
+    success = Column(Boolean)
+    profitability = Column(Float)
+    strategy_version = Column(Integer, ForeignKey("type_order.id"), nullable=False)
+    instrument = relationship("Instruments", backref="strategy_t")
+    strategy = relationship("Strategies", backref="strategy_t")
+    t_order = relationship("Type_order", backref="strategy_t")
+
+
+class Strategies(Base):
+
+    __tablename__ = "strategies"
+
+    id = Column(Integer, primary_key=True)
+    strategy = Column(Text, nullable=False)
 
 
 class Type_order(Base):
@@ -209,4 +236,3 @@ class M1_bars(Base):
 
 if __name__=="__main__":
     print("main")
-
