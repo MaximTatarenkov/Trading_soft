@@ -157,6 +157,7 @@ class Graphs():
         ax_4.plot(np.arange(len(rsi)), rsi, color="#7B68EE", label="RSI")
         ax_4.plot(np.arange(len(rsi)), mfi, color="#FF7F50", label="MFI")
 
+        ax_1.legend(title = self.symbol)
         ax_2.legend()
         ax_3.legend()
         ax_4.legend()

@@ -23,6 +23,7 @@ class Instruments(Base):
     atr_percent = Column(Float)
     closing_price = Column(Float)
     group = relationship("Groups", backref="instrument")
+    strategy_testing = relationship("StrategyTesting", backref="instruments")
 
 
 class Groups(Base):
@@ -65,18 +66,16 @@ class StrategyTesting(Base):
     type_order = Column(SmallInteger, ForeignKey("type_order.id"), nullable=False)
     success = Column(Boolean)
     profitability = Column(Float)
-    strategy_version = Column(Integer, ForeignKey("type_order.id"), nullable=False)
-    instrument = relationship("Instruments", backref="strategy_t")
-    strategy = relationship("Strategies", backref="strategy_t")
-    t_order = relationship("Type_order", backref="strategy_t")
+    strategy_version = Column(Integer, ForeignKey("strategy.id"), nullable=False)
 
 
-class Strategies(Base):
+class Strategy(Base):
 
-    __tablename__ = "strategies"
+    __tablename__ = "strategy"
 
     id = Column(Integer, primary_key=True)
     strategy = Column(Text, nullable=False)
+    strategy_testing = relationship("StrategyTesting", backref="strategy")
 
 
 class Type_order(Base):
@@ -86,6 +85,7 @@ class Type_order(Base):
     id = Column(SmallInteger, primary_key=True)
     type = Column(String(10), nullable=False)
     orders = relationship("Orders")
+    strategy_testing = relationship("StrategyTesting", backref="type_orders")
 
 
 class D1_bars(Base):
