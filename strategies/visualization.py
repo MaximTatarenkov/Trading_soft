@@ -117,7 +117,7 @@ class Graphs():
                labelsize = 10,    #  Размер подписи
                labelcolor = 'k',    #  Цвет подписи
                labelbottom = False,    #  Рисуем подписи снизу
-               labeltop = True,    #  сверху
+               labeltop = False,    #  сверху
                labelleft = True,    #  слева
                labelright = False,    #  и справа
                 )
@@ -139,10 +139,10 @@ class Graphs():
                labelright = True,    #  и справа
                 )
 
-        ao = [i.ao for i in bars.db_bars]
-        fisher = [i.fisher for i in bars.db_bars]
-        rsi = [i.rsi for i in bars.db_bars]
-        mfi = [i.mfi for i in bars.db_bars]
+        ao = [i.ao for i in bars.df_bars.itertuples(index=False)]
+        fisher = [i.fisher for i in bars.df_bars.itertuples(index=False)]
+        rsi = [i.rsi for i in bars.df_bars.itertuples(index=False)]
+        mfi = [i.mfi for i in bars.df_bars.itertuples(index=False)]
         candlestick2_ohlc(ax=ax_1,
                           opens=bars.df_bars['open'],
                           highs=bars.df_bars['high'],
@@ -169,47 +169,48 @@ class Graphs():
         plt.show()
 
     def get_bars_for_vizualization(self):
-            bars = Data_base.get_bars_from_db(session=self.session,
-                                    dt_from=self.dt_from,
-                                    dt_to=self.dt_to,
-                                    time_frame=self.time_frame,
-                                    symbol=self.symbol
-                                    )
-            df_bars = pd.DataFrame(bars, columns=["datetime", "open", "high", "low", "close", "ao", "fisher", "rsi", "mfi"])
-            df_bars = df_bars.sort_values("datetime")
-            Bars = namedtuple("Bars", "db_bars df_bars")
-            result = Bars(bars, df_bars)
-            return result
+        bars = Data_base.get_bars_from_db_with_date(session=self.session,
+                                dt_from=self.dt_from,
+                                dt_to=self.dt_to,
+                                time_frame=self.time_frame,
+                                symbol=self.symbol
+                                )
+        bars = [bar[1:] for bar in bars]
+        df_bars = pd.DataFrame(bars, columns=["datetime", "open", "high", "low", "close", "ao", "fisher", "rsi", "mfi"])
+        df_bars = df_bars.sort_values("datetime")
+        Bars = namedtuple("Bars", "db_bars df_bars")
+        result = Bars(bars, df_bars)
+        return result
 
     def get_x_dates_and_flags(self, bars):
-            dates = [i.datetime for i in bars.db_bars]
-            x_dates = []
-            flags = []
-            for i, date in enumerate(dates):
-                if i == 0 or date.day != dates[i - 1].day:
-                    x_dates.append(date.strftime("%d %B %H:%M"))
-                    flags.append(i)
-                else:
-                    x_dates.append(date.strftime("%H:%M"))
-            Result = namedtuple("Result", "x_dates flags")
-            result = Result(x_dates, flags[1:])
-            return result
+        dates = [i[0] for i in bars.db_bars]
+        x_dates = []
+        flags = []
+        for i, date in enumerate(dates):
+            if i == 0 or date.day != dates[i - 1].day:
+                x_dates.append(date.strftime("%d %B %H:%M"))
+                flags.append(i)
+            else:
+                x_dates.append(date.strftime("%d %B %H:%M"))
+        Result = namedtuple("Result", "x_dates flags")
+        result = Result(x_dates, flags[1:])
+        return result
 
     def get_major_locator(self, flags):
-            locators = [3, 4, 5]
-            locs = []
-            for loc in locators:
-                for flag in flags:
-                    modul = flag % loc
-                    if not modul:
-                        locs.append(loc)
-            major_locator = 0
-            count = 0
-            for loc in locators:
-                if locs.count(loc) > count:
-                    count = locs.count(loc)
-                    major_locator = loc
-            return major_locator
+        locators = [3, 4, 5]
+        locs = []
+        for loc in locators:
+            for flag in flags:
+                modul = flag % loc
+                if not modul:
+                    locs.append(loc)
+        major_locator = 0
+        count = 0
+        for loc in locators:
+            if locs.count(loc) > count:
+                count = locs.count(loc)
+                major_locator = loc
+        return major_locator
 
     def draw_entry_exit_points(self, entry, exit, date_entry, date_exit, type_order, ax):
         if type_order == "long":
@@ -226,5 +227,5 @@ class Graphs():
 
 if __name__ == "__main__":
     with get_session() as session:
-        graph = Graphs(session, dt_from=datetime.datetime(2022, 5, 1), dt_to=datetime.datetime(2022, 6, 1), time_frame="m30", symbol="PFE")
-        graph.create_graph(48.5, 47.5, 4, 8, "shirt")
+        graph = Graphs(session, dt_from=datetime.datetime(1984, 7, 1), dt_to=datetime.datetime(1984, 10, 1), time_frame="d1", symbol="AOS")
+        graph.create_graph()

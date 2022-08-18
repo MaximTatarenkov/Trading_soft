@@ -8,7 +8,7 @@ class Indicator:
         self.period = period
 
     def get_fisher(self):
-        fish = round(TA.FISH(self.bars, period=self.period), 2)
+        fish = round(TA.FISH(self.bars, period=10), 2)
         return fish
 
     def get_ao(self):
