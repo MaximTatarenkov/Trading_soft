@@ -248,8 +248,8 @@ def main():
 
 
 if __name__=="__main__":
-    run()
-    # with get_session() as session:
+    # run()
+    with get_session() as session:
         # data = Data_base.get_bars_from_db(session=session,
         #                            dt_from=datetime(2022, 6, 1, tzinfo=TIME_ZONE),
         #                            dt_to=datetime(2022, 7, 1, tzinfo=TIME_ZONE),
@@ -270,8 +270,8 @@ if __name__=="__main__":
     #         print(f"[ {sym} ]")
     #         fill = Filling(sym, tf)
     #         fill.fill_indicators()
-        # fill = Filling("MMM", "d1")
-        # fill.save_bars_to_db(session=session)
+    #     fill = Filling("MMM", "d1")
+    #     fill.save_bars_to_db(session=session)
 
     # run()
     # for tf in TIME_FRAME_TABLES:
@@ -287,16 +287,16 @@ if __name__=="__main__":
 
     # print("INDICATORS!!!!!!!!!!!")
 
-    # for tf in ["m30"]:
-    #     print("***********************")
-    #     print(f"Start {tf}")
-    #     for sym in ["TRMB"]:
-    #         print(f"[ {sym} ]")
-    #         fill = Filling(sym, tf)
-    #         try:
-    #             fill.fill_indicators()
-    #         except Exception as ex:
-    #             print(f"{sym}!!!", ex)
+        # for tf in ["d1"]:
+        #     print("***********************")
+        #     print(f"Start {tf}")
+        #     for sym in ["AOS"]:
+        #         print(f"[ {sym} ]")
+        #         fill = Filling(sym, tf)
+        #         fill.fill_indicators(session)
+        fill = Filling("AOS", "d1")
+        fill.fill_indicators(session)
+
 
     # print("VOLUMES!!!!!!!!!!!")
 
