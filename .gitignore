@@ -7,3 +7,4 @@ tst.py
 data_base/configuration.py
 alembic
 alembic.ini
+strategies/strategies.txt

@@ -39,9 +39,6 @@ class Graphs():
         ax_4.grid(axis = "both")
 
         ax_1.minorticks_on()
-        # ax_2.minorticks_on()
-        # ax_3.minorticks_on()
-        # ax_4.minorticks_on()
 
         ax_1.grid(which='major',
                 color = 'white',
@@ -151,22 +148,30 @@ class Graphs():
                           width=0.6,
                           alpha=1,
                           colordown='red',
-                          colorup='green')
+                          colorup='green',)
         ax_2.bar(np.arange(len(ao)), ao, color="#BA55D3", label="AO")
         ax_3.plot(np.arange(len(fisher)), fisher, color="#DC143C", label="Fish")
         ax_4.plot(np.arange(len(rsi)), rsi, color="#7B68EE", label="RSI")
         ax_4.plot(np.arange(len(rsi)), mfi, color="#FF7F50", label="MFI")
 
-        ax_1.legend(title = self.symbol)
+
+        if entry or exit:
+            number_of_bar_and_max_min = self.get_number_of_bar_and_max_min(bars.db_bars, date_entry)
+            number_entry = number_of_bar_and_max_min.date
+            max_min = number_of_bar_and_max_min.max_min
+            self.draw_entry_exit_points(type_order, ax_1, max_min, entry=entry, exit=exit, date_entry=number_entry, date_exit=date_exit)
+
+        if date_entry:
+            ax_1.legend(title = f"{self.symbol} {date_entry}")
+        else:
+            ax_1.legend(title = f"{self.symbol}")
         ax_2.legend()
         ax_3.legend()
         ax_4.legend()
 
-        if entry:
-            self.draw_entry_exit_points(entry, exit, date_entry, date_exit, type_order, ax_1)
-
         plt.subplots_adjust(wspace=0, hspace=0)
         plt.show()
+        return self
 
     def get_bars_for_vizualization(self):
         bars = Data_base.get_bars_from_db_with_date(session=self.session,
@@ -180,6 +185,19 @@ class Graphs():
         df_bars = df_bars.sort_values("datetime")
         Bars = namedtuple("Bars", "db_bars df_bars")
         result = Bars(bars, df_bars)
+        return result
+
+    def get_number_of_bar_and_max_min(self, bars, date):
+        max_min = {"max": 0, "min": 999999}
+        for index, bar in enumerate(bars):
+            if max_min["max"] < bar[2]:
+                max_min["max"] = bar[2]
+            if max_min["min"] > bar[3]:
+                max_min["min"] = bar[3]
+            if bar[0] == date:
+                number_of_bar =  index
+        Result = namedtuple("Result", "date max_min")
+        result = Result(number_of_bar, max_min)
         return result
 
     def get_x_dates_and_flags(self, bars):
@@ -212,17 +230,21 @@ class Graphs():
                 major_locator = loc
         return major_locator
 
-    def draw_entry_exit_points(self, entry, exit, date_entry, date_exit, type_order, ax):
+    def draw_entry_exit_points(self, type_order, ax, max_min, entry=None, exit=None, date_entry=None, date_exit=None):
+        range_price = max_min["max"] - max_min["min"]
+        arrow_len = 0.1 * range_price
         if type_order == "long":
-            arrow = 1
-        else:
-            arrow = -1
-        ax.arrow(date_entry, entry - (2*arrow), 0, arrow,
-        width = 0.3,
-        head_length = 1)
-        ax.arrow(date_exit, exit + (2*arrow), 0, -arrow,
-        width = 0.3,
-        head_length = 1)
+            arrow = arrow_len
+        elif type_order == "short":
+            arrow = -arrow_len
+        if entry:
+            ax.arrow(date_entry, entry - (2*arrow), 0, arrow,
+            width = 0.2,
+            head_length = arrow_len)
+        if exit:
+            ax.arrow(date_exit, exit + (2*arrow), 0, -arrow,
+            width = 0.2,
+            head_length = arrow_len)
 
 
 if __name__ == "__main__":

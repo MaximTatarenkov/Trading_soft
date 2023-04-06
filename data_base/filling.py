@@ -170,7 +170,7 @@ class Filling(Rates, Data_base):
         count = 20035 # эта цифра используется для индикаторов, которые отдают результаты не
                 # с первого бара(например АО дает результат только с 35) и + 20000 следующих баров
         if count > count_bars:
-            count = count_bars
+            self.save_indicators(session, count_bars, table, instrument_id, delta=count_bars)
         while count <= (count_bars + 1):
             self.save_indicators(session, count, table, instrument_id)
             if (count + 20000) < count_bars:
@@ -248,8 +248,10 @@ def main():
 
 
 if __name__=="__main__":
-    # run()
     with get_session() as session:
+
+    # run()
+    # with get_session() as session:
         # data = Data_base.get_bars_from_db(session=session,
         #                            dt_from=datetime(2022, 6, 1, tzinfo=TIME_ZONE),
         #                            dt_to=datetime(2022, 7, 1, tzinfo=TIME_ZONE),
@@ -287,15 +289,14 @@ if __name__=="__main__":
 
     # print("INDICATORS!!!!!!!!!!!")
 
-        # for tf in ["d1"]:
-        #     print("***********************")
-        #     print(f"Start {tf}")
-        #     for sym in ["AOS"]:
-        #         print(f"[ {sym} ]")
-        #         fill = Filling(sym, tf)
-        #         fill.fill_indicators(session)
-        fill = Filling("AOS", "d1")
-        fill.fill_indicators(session)
+        for tf in ["d1"]:
+            print("***********************")
+            print(f"Start {tf}")
+            for sym in SNP:
+                print(f"[ {sym} ]")
+                fill = Filling(sym, tf)
+                fill.fill_indicators(session)
+
 
 
     # print("VOLUMES!!!!!!!!!!!")
